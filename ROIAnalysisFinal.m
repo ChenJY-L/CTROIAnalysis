@@ -88,6 +88,7 @@ allTimeStampCell = cell(1, length(filesToProcessIdx));
 % 添加边缘检测结果存储
 allEdgePositionCell = cell(1, length(filesToProcessIdx));
 allCountsBelowCellSub = cell(1, length(filesToProcessIdx));
+allHistogramsCell = cell(1, length(filesToProcessIdx)); % 存储每个文件的直方图数据
 processedFrameCount = 0;
 refEdgePosition = zeros(0);
 
@@ -96,6 +97,8 @@ fprintf('正在处理文件和其中的帧...\n');
 ROIArea = sum(roiMask, 'all');
 frameInterval = inputdlg("帧间隔", "帧间隔设置", [1 35], "15");
 frameInterval = str2double(frameInterval{1});
+
+histBinEdges = linspace(0, 255, 51 + 1);
 
 corrFlag = inputdlg("是否根据表皮层位移对ROI进行矫正", "ROI矫正设置", [1 35], "1");
 corrFlag = logical(str2double(corrFlag));
@@ -170,6 +173,7 @@ for k = filesToProcessIdx
     tmpPointsBelow = zeros(0);
     tmpEdgePosition = zeros(0);
     tmpTimeStamp = NaT(0);
+    tmpHistograms = [];
     if useSubROIs
         currentFileCountsSubROI = zeros(length(subMasks), length(1:frameInterval:P));
     end
@@ -204,11 +208,6 @@ for k = filesToProcessIdx
             epidermisDiff = round(mean(refEdgePosition) - mean(rows)); % 参考表皮层与当前表皮层位置做差
 
             % 修正ROI位置
-            % [y, x] = find(oriROIMask);
-            % y = y - epidermisDiff;
-            % roiMask = false(size(currentFrame));
-            % idx = sub2ind(size(currentFrame), y, x);
-            % roiMask(idx) = true;
             roiMask = fixROI(oriROIMask, epidermisDiff);
 
             if useSubROIs
@@ -254,6 +253,10 @@ for k = filesToProcessIdx
 
         % Count pixels above and below/equal to the threshold within the ROI
         countsBelowFrame = sum(frameInsideROI <= threshold)/ROIArea;
+
+        % 提取直方图数据
+        [histCounts, ~] = histcounts(frameInsideROI, histBinEdges);
+        histCounts = histCounts / sum(histCounts); % Normalize to probability
         
         % 提取子ROI的数据
         if useSubROIs
@@ -276,12 +279,14 @@ for k = filesToProcessIdx
         tmpTimeStamp(end+1) = startTime + frameIdx*frameTime;
         tmpPointsBelow(end+1) = countsBelowFrame;
         tmpEdgePosition(end+1) = mean(rows);
+        tmpHistograms = [tmpHistograms; histCounts];
         
     end % End of frame loop
 
     allTimeStampCell{k} = tmpTimeStamp;
     allCountsBelowCell{k} = tmpPointsBelow;
     allEdgePositionCell{k} = tmpEdgePosition;
+    allHistogramsCell{k} = tmpHistograms;
 
     if useSubROIs
         allCountsBelowCellSub{k} = currentFileCountsSubROI;
@@ -357,7 +362,7 @@ title('表皮层位移', 'FontSize', 18);
 grid on;
 box on;
 
-%% 10.绘制SubMask的结果
+%% 10. 绘制SubMask的结果
 if useSubROIs
     figure('Name', 'SubROI内像素计数变化曲线 (按帧)', 'Position', [500, 500, 1600, 500]);
     
@@ -402,3 +407,11 @@ if useSubROIs
         grid on;
     end
 end
+
+%% 11. 直方图可视化
+plotHistogram(allHistogramsCell, ...
+              allTimeStampCell, ...
+              histBinEdges, ...
+              threshold, ...
+              eventDateTimes, ...
+              eventLabels);
