@@ -106,6 +106,17 @@ corrFlag = logical(str2double(corrFlag));
 saveVideoFlag = inputdlg("是否保存为视频", "Save", [1 35], "0");
 saveVideoFlag = logical(str2double(saveVideoFlag));
 
+grayCorr = inputdlg({"是否进行灰度值矫正", "矫正斜率K(1/mm)"}, ...
+                        "灰度矫正", [1 35], {"0", "13.513"});
+grayCorrFlag = logical(str2double(grayCorr{1}));
+
+if grayCorrFlag
+    grayCorrK = str2double(grayCorr{2});
+    % grayCorrb = str2double(grayCorr{3});
+    grayCorrFunc = @(h) grayCorrK*h;
+end
+
+%% 8.5 循环处理
 if saveVideoFlag
     figure('Name', 'CurrentFrame')
     videoFile = fullfile(dicomDir,'output.avi');  % 或 'output.mp4'
@@ -246,6 +257,12 @@ for k = filesToProcessIdx
             % 写入处理结果
             frame = getframe(gca);
             writeVideo(v, frame);
+        end
+        
+        % 根据耦合剂厚度进行灰度矫正
+        if grayCorrFlag & (~isempty(refEdgePosition))
+            agentHeight = (rows - refEdgePosition)*unitY;
+            currentFrame(roiMask) = currentFrame(roiMask) - mean(grayCorrFunc(agentHeight));
         end
 
         % Apply the ROI mask: get pixel values within the ROI
