@@ -89,6 +89,7 @@ allTimeStampCell = cell(1, length(filesToProcessIdx));
 allEdgePositionCell = cell(1, length(filesToProcessIdx));
 allCountsBelowCellSub = cell(1, length(filesToProcessIdx));
 allHistogramsCell = cell(1, length(filesToProcessIdx)); % 存储每个文件的直方图数据
+allElipseCoeffs = cell(1, length(filesToProcessIdx));
 processedFrameCount = 0;
 refEdgePosition = zeros(0);
 
@@ -185,6 +186,7 @@ for k = filesToProcessIdx
     tmpEdgePosition = zeros(0);
     tmpTimeStamp = NaT(0);
     tmpHistograms = [];
+    tmpElipseCoeffs = [];
     if useSubROIs
         currentFileCountsSubROI = zeros(length(subMasks), length(1:frameInterval:P));
     end
@@ -206,7 +208,7 @@ for k = filesToProcessIdx
         end
         
         % 表皮层位置检测
-        [rows, cols] = detectEpidermis(currentFrame, edgeRoiMask, [0.2, 0.22]);
+        [rows, cols] = detectEpidermis(currentFrame, edgeRoiMask, [0.15, 0.22]);
         
         if processedFrameCount == 1
             % 保留第一帧中表皮层的位置
@@ -267,7 +269,10 @@ for k = filesToProcessIdx
 
         % Apply the ROI mask: get pixel values within the ROI
         frameInsideROI = currentFrame(roiMask);
-
+        
+        % 估计衰减系数
+        [elipseCoeffs, elipseStat] = elipseValueEstimation(currentFrame, roiMask, rows, unitY);
+        
         % Count pixels above and below/equal to the threshold within the ROI
         countsBelowFrame = sum(frameInsideROI <= threshold)/ROIArea;
 
@@ -297,6 +302,7 @@ for k = filesToProcessIdx
         tmpPointsBelow(end+1) = countsBelowFrame;
         tmpEdgePosition(end+1) = mean(rows);
         tmpHistograms = [tmpHistograms; histCounts];
+        tmpElipseCoeffs = [tmpElipseCoeffs; elipseCoeffs'];
         
     end % End of frame loop
 
@@ -304,6 +310,7 @@ for k = filesToProcessIdx
     allCountsBelowCell{k} = tmpPointsBelow;
     allEdgePositionCell{k} = tmpEdgePosition;
     allHistogramsCell{k} = tmpHistograms;
+    allElipseCoeffs{k} = tmpElipseCoeffs;
 
     if useSubROIs
         allCountsBelowCellSub{k} = currentFileCountsSubROI;
@@ -432,3 +439,24 @@ plotHistogram(allHistogramsCell, ...
               threshold, ...
               eventDateTimes, ...
               eventLabels);
+%% 12. 绘制衰减系数的变化趋势
+figure('Name', 'ROI内衰减系数变化曲线 (按帧)', 'Position', [500, 500, 1600, 500]);
+ 
+hold on; % Keep current plot
+for i = 1:numel(allTimeStampCell)
+    plot(allTimeStampCell{i}, allElipseCoeffs{i}(:, 2), ...
+        '-o',  ...
+        'Color', [0, 0.4470, 0.7410]);
+end
+% 添加 xlines
+for k = 1:numel(eventDateTimes)
+    h = xline(eventDateTimes(k), 'r--', eventLabels{k});
+    h.FontSize = 13;
+end
+hold off; % Release plot
+
+% Add labels, title, legend
+xlabel("时间");
+ylabel('衰减系数');
+grid on;
+box on;

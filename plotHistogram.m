@@ -38,7 +38,7 @@ colorbar;
 xlabel('像素值');
 ylabel('帧索引');
 title('ROI内像素值分布随时间的变化 (统计图)');
-colormap('hot');
+colormap('jet');
 
 %%
 nexttile,
