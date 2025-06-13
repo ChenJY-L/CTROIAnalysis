@@ -1,5 +1,7 @@
 function plotHistogram(allHistogramsCell, allTimeStampCell, histBinEdges, threshold, eventDateTimes, eventLabels)
-
+%%
+eventDateTimes = datetime(eventDateTimes, 'InputFormat', 'yyyyMMdd HH:mm');
+%%
 histBinCenters = (histBinEdges(1:end - 1) + histBinEdges(2:end)) / 2;
 
 allHistograms = [];
@@ -21,7 +23,7 @@ colorbar;
 xlabel('像素值');
 ylabel('帧索引');
 title('ROI内像素值分布随时间的变化 (热图)');
-colormap('hot');
+colormap('jet');
 
 % 添加阈值线
 hold on;
@@ -35,7 +37,7 @@ threshHotMap = cumsum(allHistograms, 2);
 % 绘制热图
 imagesc(histBinCenters, timeIndices, threshHotMap);
 colorbar;
-xlabel('像素值');
+xlabel('灰度值');
 ylabel('帧索引');
 title('ROI内像素值分布随时间的变化 (统计图)');
 colormap('jet');
@@ -59,8 +61,8 @@ end
 ylim_current = ylim;
 plot([threshold, threshold], ylim_current, 'k--', 'LineWidth', 2, 'DisplayName', '阈值');
 
-xlabel('像素值');
-ylabel('归一化频率');
+xlabel('灰度值');
+ylabel('归一化占比');
 title('ROI内不同时间点的像素值分布对比');
 legend('Location', 'best');
 grid on;
@@ -76,8 +78,8 @@ for i = 1:length(selectedFrames)
          'DisplayName', sprintf('%s', eventLabels{i}));
 end
 
-xlabel('像素值');
-ylabel('归一化频率');
+xlabel('灰度值');
+ylabel('占比值的积分');
 title('ROI内不同时间点的像素值分布对比');
 legend('Location', 'best');
 grid on;

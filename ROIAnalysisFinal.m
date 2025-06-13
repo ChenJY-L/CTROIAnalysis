@@ -90,6 +90,7 @@ allEdgePositionCell = cell(1, length(filesToProcessIdx));
 allCountsBelowCellSub = cell(1, length(filesToProcessIdx));
 allHistogramsCell = cell(1, length(filesToProcessIdx)); % 存储每个文件的直方图数据
 allElipseCoeffs = cell(1, length(filesToProcessIdx));
+allMeanCell = cell(1, length(filesToProcessIdx));
 processedFrameCount = 0;
 refEdgePosition = zeros(0);
 
@@ -187,6 +188,7 @@ for k = filesToProcessIdx
     tmpTimeStamp = NaT(0);
     tmpHistograms = [];
     tmpElipseCoeffs = [];
+    tmpMean = [];
     if useSubROIs
         currentFileCountsSubROI = zeros(length(subMasks), length(1:frameInterval:P));
     end
@@ -271,7 +273,7 @@ for k = filesToProcessIdx
         frameInsideROI = currentFrame(roiMask);
         
         % 估计衰减系数
-        [elipseCoeffs, elipseStat] = elipseValueEstimation(currentFrame, roiMask, rows, unitY);
+        % [elipseCoeffs, elipseStat] = elipseValueEstimation(currentFrame, roiMask, rows, unitY);
         
         % Count pixels above and below/equal to the threshold within the ROI
         countsBelowFrame = sum(frameInsideROI <= threshold)/ROIArea;
@@ -302,18 +304,23 @@ for k = filesToProcessIdx
         tmpPointsBelow(end+1) = countsBelowFrame;
         tmpEdgePosition(end+1) = mean(rows);
         tmpHistograms = [tmpHistograms; histCounts];
-        tmpElipseCoeffs = [tmpElipseCoeffs; elipseCoeffs'];
+        tmpMean(end+1) = mean(frameInsideROI);
+
+        % tmpElipseCoeffs = [tmpElipseCoeffs; elipseCoeffs'];
         
     end % End of frame loop
+    
+    idx = k - filesToProcessIdx(1) + 1;
+    allTimeStampCell{idx} = tmpTimeStamp;
+    allCountsBelowCell{idx} = tmpPointsBelow;
+    allEdgePositionCell{idx} = tmpEdgePosition;
+    allHistogramsCell{idx} = tmpHistograms;
+    allMeanCell{idx} = tmpMean;
 
-    allTimeStampCell{k} = tmpTimeStamp;
-    allCountsBelowCell{k} = tmpPointsBelow;
-    allEdgePositionCell{k} = tmpEdgePosition;
-    allHistogramsCell{k} = tmpHistograms;
-    allElipseCoeffs{k} = tmpElipseCoeffs;
+    % allElipseCoeffs{idx} = tmpElipseCoeffs;
 
     if useSubROIs
-        allCountsBelowCellSub{k} = currentFileCountsSubROI;
+        allCountsBelowCellSub{idx} = currentFileCountsSubROI;
     end
     
     % 按照视频矫正
@@ -335,128 +342,25 @@ end
 [eventTimesStr, eventLabels] = readEvents(dicomDir);
 
 %% 9. Plot the results
-figure('Name', 'ROI内像素计数变化曲线 (按帧)', 'Position', [500, 500, 1600, 500]);
-set(0, 'DefaultAxesFontSize', 14); % 设置坐标轴字体大小
-set(0, 'DefaultTextFontSize', 14); % 设置文本字体大小
-tiledlayout('flow')
-% 将字符串时间转换为 datetime 对象
-eventDateTimes = datetime(eventTimesStr, 'InputFormat', 'yyyyMMdd HH:mm');
-
-% Plot counts against cumulative frame index
-nexttile, 
-hold on; % Keep current plot
-for i = 1:numel(allTimeStampCell)
-    plot(allTimeStampCell{i}, allCountsBelowCell{i}*100, ...
-        '-o',  ...
-        'Color', [0, 0.4470, 0.7410]);
-end
-% 添加 xlines
-for k = 1:numel(eventDateTimes)
-    h = xline(eventDateTimes(k), 'r--', eventLabels{k});
-    h.FontSize = 13;
-end
-hold off; % Release plot
-
-% Add labels, title, legend
-xlabel("时间");
-ylabel('像素数量(归一化)');
-ytickformat('percentage')
-title(sprintf('ROI区域内低于阈值%g的像素数量占比', threshold), 'FontSize', 18);
-% legend('Location', 'best');
-grid on;
-box on;
-
-nexttile, 
-for i = 1:numel(allTimeStampCell)
-    plot(allTimeStampCell{i}, allEdgePositionCell{i}.*unitY, '-s', 'Color', [0.8500, 0.3250, 0.0980]);
-    hold on;
-end
-set(gca, 'YDir', 'reverse');
-
-% 添加事件标记
-for k = 1:numel(eventDateTimes)
-    h = xline(eventDateTimes(k), 'r--', eventLabels{k});
-    h.FontSize = 13;
-end
-hold off;
-
-xlabel("时间");
-ylabel('表皮层平均像素y坐标(mm)');
-title('表皮层位移', 'FontSize', 18);
-grid on;
-box on;
+plotResult(allTimeStampCell, ...
+    allCountsBelowCell, ...
+    allEdgePositionCell, ...
+    allMeanCell, ...
+    allHistogramsCell, ...
+    histBinEdges, ...
+    eventTimesStr, eventLabels, ...
+    threshold, unitY)
 
 %% 10. 绘制SubMask的结果
 if useSubROIs
-    figure('Name', 'SubROI内像素计数变化曲线 (按帧)', 'Position', [500, 500, 1600, 500]);
-    
-    tiledlayout(length(ratio_u), length(ratio_v)), 
-    % --- Define colors and markers ---
-    num_u = length(ratio_u);
-    plotColors = lines(max(1, length(ratio_v))); % One color per row
-    plotMarkers = {'o', 's', '^', 'd', 'v', 'p', 'h', 'x', '*', '+'}; % Markers for columns
-    lineStyles = {'-', '--', ':', '-.'}; % Line styles can also be varied
-    colors = parula(num_u);
-
-    % 将字符串时间转换为 datetime 对象
-    eventDateTimes = datetime(eventTimesStr, 'InputFormat', 'yyyyMMdd HH:mm');
-    
-    for s_idx = 1:length(subMasks) 
-        nexttile, 
-        hold on
-        for i = filesToProcessIdx
-            markIndex = mod(s_idx - 1, num_u) + 1;
-            % colorIndex = floor((s_idx - 1) / num_u) + 1;
-            
-            plot(allTimeStampCell{i}, allCountsBelowCellSub{i}(s_idx, :)*100, ...
-                'LineStyle', lineStyles{markIndex}, ...
-                'Marker', plotMarkers{markIndex}, ...
-                'Color', [0, 0.4470, 0.7410]...
-                );
-        end
-
-        % 添加 xlines
-        for k = 1:numel(eventDateTimes)
-            h = xline(eventDateTimes(k), 'r--', eventLabels{k});
-            h.FontSize = 13;
-        end
-        hold off; % Release plot
-
-        % Add labels, title, legend
-        xlabel("时间");
-        ylabel('像素数量(归一化)');
-        ytickformat('percentage')
-        title(sprintf('ROI区域内低于阈值%g的像素数量占比 -- Sub%d', threshold, s_idx));
-        % legend('Location', 'best');
-        grid on;
-    end
+    plotSubROI(allTimeStampCell, allCountsBelowCellSub, subMasks,...
+               ratio_u, ratio_v, ...
+               eventTimesStr, eventLabels, threshold)
 end
-
 %% 11. 直方图可视化
 plotHistogram(allHistogramsCell, ...
               allTimeStampCell, ...
               histBinEdges, ...
               threshold, ...
-              eventDateTimes, ...
+              eventTimesStr, ...
               eventLabels);
-%% 12. 绘制衰减系数的变化趋势
-figure('Name', 'ROI内衰减系数变化曲线 (按帧)', 'Position', [500, 500, 1600, 500]);
- 
-hold on; % Keep current plot
-for i = 1:numel(allTimeStampCell)
-    plot(allTimeStampCell{i}, allElipseCoeffs{i}(:, 2), ...
-        '-o',  ...
-        'Color', [0, 0.4470, 0.7410]);
-end
-% 添加 xlines
-for k = 1:numel(eventDateTimes)
-    h = xline(eventDateTimes(k), 'r--', eventLabels{k});
-    h.FontSize = 13;
-end
-hold off; % Release plot
-
-% Add labels, title, legend
-xlabel("时间");
-ylabel('衰减系数');
-grid on;
-box on;
