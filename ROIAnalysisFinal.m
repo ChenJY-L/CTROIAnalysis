@@ -101,6 +101,7 @@ frameInterval = inputdlg("帧间隔", "帧间隔设置", [1 35], "15");
 frameInterval = str2double(frameInterval{1});
 
 histBinEdges = linspace(0, 255, 51 + 1);
+histBinEdges(2:end) = histBinEdges(2:end) + 0.1;
 
 corrFlag = inputdlg("是否根据表皮层位移对ROI进行矫正", "ROI矫正设置", [1 35], "1");
 corrFlag = logical(str2double(corrFlag));
@@ -280,7 +281,7 @@ for k = filesToProcessIdx
 
         % 提取直方图数据
         [histCounts, ~] = histcounts(frameInsideROI, histBinEdges);
-        histCounts = histCounts / sum(histCounts); % Normalize to probability
+        histCounts = histCounts / ROIArea; % Normalize to probability
         
         % 提取子ROI的数据
         if useSubROIs
